@@ -1,0 +1,114 @@
+version: '3'
+services:
+  # PostgreSQL для метаданных Airflow
+  postgres_airflow:
+    image: postgres:13
+    container_name: postgres_airflow
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres_airflow_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - airflow-network
+
+  # PostgreSQL для данных приложения (ваших DAG'ов)
+  postgres_data:
+    image: postgres:13
+    container_name: postgres_data
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "123123"
+      POSTGRES_DB: news_db
+    ports:
+      - "5433:5432"  # Другой порт для доступа с хоста
+    volumes:
+      - postgres_app_data:/var/lib/postgresql/data
+      - ./init_app_db.sql:/docker-entrypoint-initdb.d/init_app_db.sql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "data_user"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - airflow-network
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - airflow-network
+
+  airflow-webserver:
+    image: apache/airflow:2.7.1
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres_airflow/airflow
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=true
+      - _AIRFLOW_DB_UPGRADE=true
+      - _AIRFLOW_WWW_USER_CREATE=true
+      - _AIRFLOW_WWW_USER_USERNAME=admin
+      - _AIRFLOW_WWW_USER_PASSWORD=admin
+      # Переменная для подключения к БД данных в DAG'ах
+      - AIRFLOW_CONN_POSTGRES_APP=postgresql://data_user:data_password@postgres_data:5432/application_data
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+    ports:
+      - "8080:8080"
+    command: webserver
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    depends_on:
+      postgres_airflow:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - airflow-network
+
+  airflow-scheduler:
+    image: apache/airflow:2.7.1
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres_airflow/airflow
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      # Переменная для подключения к БД данных в DAG'ах
+      - AIRFLOW_CONN_POSTGRES_APP=postgresql://data_user:data_password@postgres_data:5432/application_data
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+    command: scheduler
+    depends_on:
+      postgres_airflow:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - airflow-network
+
+volumes:
+  postgres_airflow_data:
+  postgres_app_data:
+
+networks:
+  airflow-network:
+    driver: bridge
