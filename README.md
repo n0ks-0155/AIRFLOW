@@ -7,6 +7,9 @@ airflow-docker
 │   ├── __pycache__                 #Кеширование
 │   └── air_quality_dag.py          #Даг
 │
+├── init_app_db.sql/
+│   └── init_app_db.sql             #Создание пользователя и обновление его прав
+│
 ├── logs/
 │   ├── dag_id=<имя dag>            #Логи выполнения конкретных дагов
 │   ├── dag_processor_manager       #Логи менеджера по обработке дагов
