@@ -123,7 +123,7 @@ def save_air_quality_data(**kwargs):
     
     logging.info(f"Сохранено {inserted_count} новых записей в БД приложения")
 ```
-Также для создания таблиц можно использовать прямой SQL через PostgresHook, как показано в функции create_air_quality_table():
+Также для создания таблиц можно использовать прямой SQL через PostgresHook, как показано в функции `create_air_quality_table()`:
 ```
 def create_air_quality_table():
     """Создание таблицы для данных о качестве воздуха в БД приложения"""
